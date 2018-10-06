@@ -15,7 +15,7 @@ class RoboFile extends \Robo\Tasks {
      * Set up WordPress.
      *
      * @param  array $opts Options
-     * @return void
+     * @return mixed
      */
     public function wordpressSetup(
         $opts = [
@@ -27,13 +27,14 @@ class RoboFile extends \Robo\Tasks {
             'wp-db-name' => 'wp_headless',
             'wp-description' => 'Just another (headless) WordPress site',
             'wp-plugins' => [],
+            'docker' => false,
         ]
     ) {
         $confirm = $this->io()->confirm( 'This will replace your current ' .
         'WordPress install. Are you sure you want to do this?', false );
 
         if ( ! $confirm ) {
-            return;
+            return 1;
         }
 
         $uname = php_uname();
@@ -57,15 +58,19 @@ class RoboFile extends \Robo\Tasks {
                 $this->_exec( 'mysql.server start' );
                 $this->_exec( './mysql_config.sh' );
             } else {
-                $this->_exec(
-                    "echo 'mysql-server mysql-server/root_password_again password root' | sudo debconf-set-selections"
-                );
-                $this->_exec(
-                    "echo 'mysql-server mysql-server/root_password_again password root' | sudo debconf-set-selections"
-                );
-                $this->_exec( 'sudo apt-get -y install mysql-server' );
-                $this->_exec( 'sudo usermod -d /var/lib/mysql/ mysql' );
-                $this->_exec( 'sudo service mysql start' );
+                if ( !$opts['docker'] ) {
+                    $this->_exec(
+                        "echo 'mysql-server mysql-server/root_password_again password root' | ".
+                        'sudo debconf-set-selections'
+                    );
+                    $this->_exec(
+                        "echo 'mysql-server mysql-server/root_password_again password root' | ".
+                        'sudo debconf-set-selections'
+                    );
+                    $this->_exec( 'sudo apt-get -y install mysql-server' );
+                    $this->_exec( 'sudo usermod -d /var/lib/mysql/ mysql' );
+                    $this->_exec( 'sudo service mysql start' );
+                }
             }
         }
 
@@ -74,12 +79,17 @@ class RoboFile extends \Robo\Tasks {
         }
 
         if ( !$db_ip || strlen( $db_ip ) === 0 ) {
-            $db_ip = '0.0.0.0';
+            if ( !$opts['docker'] ) {
+                $db_ip = '0.0.0.0';
+            } else {
+                $db_ip = 'localhost';
+            }
         }
 
         $this->_exec(
             'mysql -uroot -p' . $db_pass . ' -h ' . $db_ip . " -e 'create user if not exists "
-            . $opts['wp-db-name'] . "'"
+            . $opts['wp-db-name'] . '@localhost identified with mysql_native_password by "'
+            . $opts['wp-db-name'] . "\"'"
         );
         $this->_exec(
             'mysql -uroot -p' . $db_pass . ' -h ' . $db_ip
@@ -87,12 +97,13 @@ class RoboFile extends \Robo\Tasks {
         );
         $this->_exec(
             'mysql -uroot -p' . $db_pass . ' -h ' . $db_ip . ' -e "grant all privileges on ' . $opts['wp-db-name']
-            . '.* to ' . $opts['wp-db-name'] . "@localhost identified by '" . $opts['wp-db-name'] . "'\""
+            . '.* to ' . $opts['wp-db-name'] . '@localhost"'
         );
 
         $this->_exec( 'mysql -uroot -p' . $db_pass . ' -h ' . $db_ip . " -e 'flush privileges'" );
 
-        $this->wp( 'core download --version=4.9.5 --locale=en_US --force' );
+        $this->wp( 'core download --version=4.9.7 --locale=en_US --force' );
+        $this->_exec( 'rm wordpress/wp-config.php > /dev/null 2>&1 || true' );
         $this->wp(
             'core config --dbname=' . $opts['wp-db-name'] . ' --dbuser=' . $opts['wp-db-name'] . ' --dbpass='
             . $opts['wp-db-name'] . ' --dbhost=' . $db_ip
@@ -188,7 +199,7 @@ class RoboFile extends \Robo\Tasks {
      * @return void
      */
     public function server() {
-        $this->wp( 'server' );
+        $this->wp( 'server --host=0.0.0.0' );
     }
 
     /**
@@ -233,7 +244,7 @@ class RoboFile extends \Robo\Tasks {
      * @return void
      */
     public function wp( $arg ) {
-        $this->taskExec( 'wp' )
+        $this->taskExec( 'wp --allow-root' )
          ->dir( WP_DIR )
          ->rawArg( $arg )
          ->run();
