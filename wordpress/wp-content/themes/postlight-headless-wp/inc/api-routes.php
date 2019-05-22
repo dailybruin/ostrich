@@ -67,8 +67,48 @@ add_action(
                 return current_user_can( 'edit_posts' );
             },
         ] );
+
+        register_rest_field( 'post',
+        'blocks',
+        array(
+            'get_callback'    => 'rest_get_blocks',
+            'update_callback' => null,
+            'schema'          => null,
+        ));
     }
 );
+
+/**
+ * Returns blocks array from a post object
+ * 
+ * @
+ */
+function rest_get_blocks($object) {
+    $post = get_post($object['id']);
+    if ($post instanceof WP_Post) {
+        $rawblocks = parse_blocks($post->post_content); 
+        for ($x = 0; $x <= 10; $x++) {
+            echo "The number is: $x <br>";
+        } 
+        // TODO: switch on block-type, call separate function to parse depending
+        switch (n) {
+    case label1:
+        //code to be executed if n=label1;
+        break;
+    case label2:
+        //code to be executed if n=label2;
+        break;
+    case label3:
+        //code to be executed if n=label3;
+        break;
+    //...
+    default:
+        //code to be executed if n is different from all labels;
+}
+
+    }
+    return array(["missed if statement"]);
+}
 
 /**
  * Respond to a REST API request to get post data.
