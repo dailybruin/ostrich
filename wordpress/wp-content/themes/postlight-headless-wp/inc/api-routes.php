@@ -2,6 +2,7 @@
 /**
  * Register custom REST API routes.
  */
+
 add_action(
     'rest_api_init',
     function () {
@@ -80,35 +81,113 @@ add_action(
 
 /**
  * Returns blocks array from a post object
- * 
+ *
  * @
  */
-function rest_get_blocks($object) {
-    $post = get_post($object['id']);
-    if ($post instanceof WP_Post) {
-        $rawblocks = parse_blocks($post->post_content); 
-        for ($x = 0; $x <= 10; $x++) {
-            echo "The number is: $x <br>";
-        } 
-        // TODO: switch on block-type, call separate function to parse depending
-        switch (n) {
-    case label1:
-        //code to be executed if n=label1;
-        break;
-    case label2:
-        //code to be executed if n=label2;
-        break;
-    case label3:
-        //code to be executed if n=label3;
-        break;
-    //...
-    default:
-        //code to be executed if n is different from all labels;
-}
 
-    }
-    return array(["missed if statement"]);
-}
+ // Supported Block Types
+
+ class Block {
+   function __construct($t,$html) {
+     $this->type = $t;
+     $this->rawHTML = $html;
+   }
+ }
+
+ class ClassicBlock extends Block {
+   function __construct($html) {
+     parent::__construct("classic",$html);
+     $this->html = $html;
+   }
+ }
+ class ParagraphBlock extends Block {
+   function __construct($html,$txt) {
+     parent::__construct("paragraph",$html);
+     $this->text = $txt;
+   }
+ }
+ class ImageBlock extends Block {
+   function __construct($html,$src,$cap) {
+     parent::__construct("image",$html);
+     $this->src = $src;
+     $this->caption = $cap;
+   }
+ }
+ class VideoBlock extends Block {
+   function __construct($html,$src,$cap) {
+     parent::__construct("video",$html);
+     $this->src = $src;
+     $this->caption = $cap;
+   }
+ }
+
+//  Add Blocks to JSON
+
+ function rest_get_blocks($object) {
+   ob_start();
+   $post = get_post($object['id']);
+   if ($post instanceof WP_Post) {
+     $rawblocks = parse_blocks($post->post_content);
+     $blocks = array();
+     for ($x = 0; $x <= count($rawblocks); $x++) {
+       if ($rawblocks[$x] != null && $rawblocks[$x]["innerHTML"] != "\n\n") {
+         array_push($blocks,parseBlock($rawblocks[$x]));
+       }
+     }
+     return $blocks;
+   }
+   else {
+     return array(["no blocks found"]);
+   }
+   ob_end_clean();
+ }
+
+ // Parse Blocks By Type
+
+ function parseBlock($rb) {
+   switch ($rb["blockName"]) {
+     case "core/paragraph":
+     return parseParagraphBlock($rb["innerHTML"]);
+     break;
+     case "core/image":
+     return parseImageBlock($rb["innerHTML"]);
+     break;
+     case "core/video":
+     return parseVideoBlock($rb["innerHTML"]);
+     break;
+     default:
+     return new ClassicBlock($rb["innerHTML"]);
+   }
+ }
+
+ function parseParagraphBlock($html) {
+   $dom = new DOMDocument();
+   ob_start();
+   $dom->loadHTML($html);
+   ob_end_clean();
+   $p = $dom->getElementsByTagName('p')[0];
+   return new ParagraphBlock($html,$p->nodeValue);
+ }
+
+ function parseImageBlock($html) {
+   $dom = new DOMDocument();
+   ob_start();
+   $dom->loadHTML($html);
+   ob_end_clean();
+   $img = $dom->getElementsByTagName('img')[0];
+   $caption = $dom->getElementsByTagName('figcaption')[0];
+   return new ImageBlock($html,$img->getAttribute('src'),$caption->nodeValue);
+ }
+
+ function parseVideoBlock($html) {
+   $dom = new DOMDocument();
+   ob_start();
+   $dom->loadHTML($html);
+   ob_end_clean();
+   $video = $dom->getElementsByTagName('video')[0];
+   $caption = $dom->getElementsByTagName('figcaption')[0];
+   return new VideoBlock($html,$video->getAttribute('src'),$caption->nodeValue);
+ }
 
 /**
  * Respond to a REST API request to get post data.
